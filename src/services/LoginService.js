@@ -1,45 +1,51 @@
-// Simple authentication service with hardcoded credentials
-const credentials = {
-  username: "admin",
-  password: "123456"
-};
+import axios from 'axios';
 
-// Login function that returns a promise
-export const login = (username, password) => {
-  return new Promise((resolve, reject) => {
-    // Simulate server delay
-    setTimeout(() => {
-      if (username === credentials.username && password === credentials.password) {
-        // Create a session token (could be more sophisticated in a real app)
-        const token = "mock-jwt-token-" + Math.random().toString(36).substr(2);
-        // Store token in localStorage
-        localStorage.setItem('authToken', token);
-        localStorage.setItem('user', username);
-        resolve({ success: true, user: username, token });
-      } else {
-        reject({ success: false, message: "Credenciales inválidas" });
-      }
-    }, 500); // 500ms delay to simulate network
-  });
+export const login = async (username, password) => {
+  const response = await axios.post('/api/auth/login', { username, password });
+  const payload = response.data;
+
+  if (payload?.success && payload?.token) {
+    localStorage.setItem('authToken', payload.token);
+    localStorage.setItem('user', payload.user || username);
+    localStorage.setItem('role', payload.role || 'auditor');
+  }
+
+  return payload;
 };
 
 // Check if user is logged in
 export const isAuthenticated = () => {
   const token = localStorage.getItem('authToken');
   const user = localStorage.getItem('user');
-  return token && user;
+  return Boolean(token && user);
+};
+
+export const getAuthHeaders = () => {
+  const token = localStorage.getItem('authToken');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+export const getCurrentRole = () => {
+  return localStorage.getItem('role') || 'auditor';
 };
 
 // Logout function
 export const logout = () => {
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    axios.post('/api/auth/logout', {}, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+  }
   localStorage.removeItem('authToken');
   localStorage.removeItem('user');
+  localStorage.removeItem('role');
   return { success: true };
 };
 
 export default {
   login,
   isAuthenticated,
+  getAuthHeaders,
+  getCurrentRole,
   logout
 };
 

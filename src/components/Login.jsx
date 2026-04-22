@@ -29,7 +29,8 @@ const Login = ({ onLoginSuccess }) => {
       }
     } catch (error) {
       setLoading(false);
-      setError('Error de inicio de sesión: ' + (error.message || 'Credenciales inválidas'));
+      const apiMessage = error?.response?.data?.message;
+      setError('Error de inicio de sesión: ' + (apiMessage || error.message || 'Credenciales inválidas'));
     }
   };
 
@@ -90,8 +91,8 @@ const Login = ({ onLoginSuccess }) => {
           </Form.Item>
           
           <div style={{ textAlign: 'center' }}>
-            <p>Usuario de demo: admin</p>
-            <p>Contraseña: 123456</p>
+            <p>Demo 1: admin / 123456</p>
+            <p>Demo 2: auditor / auditoria2026</p>
           </div>
         </Form>
       </Card>
