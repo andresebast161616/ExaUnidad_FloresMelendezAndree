@@ -202,9 +202,14 @@ def analizar_riesgos():
     if not activo:
         return jsonify({"error": "El campo 'activo' es necesario"}), 400
     
-    riesgos, impactos = obtener_riesgos(activo)  # Llamar a la función para obtener riesgos e impactos
+    riesgos, impactos, probabilidades = obtener_riesgos(activo)  # Llamar a la función para obtener riesgos e impactos
     _append_audit("risk_analysis", f"Activo analizado: {activo}", g.current_user)
-    return jsonify({"activo": activo, "riesgos": riesgos, "impactos": impactos})
+    return jsonify({
+        "activo": activo, 
+        "riesgos": riesgos, 
+        "impactos": impactos,
+        "probabilidades": probabilidades
+    })
 
 @app.route('/sugerir-tratamiento', methods=['POST'])
 @app.route('/api/sugerir-tratamiento', methods=['POST'])
@@ -327,7 +332,10 @@ def admin_reset_password(username):
 def _chat_completion(messages, max_tokens=500):
     models = [
         os.getenv("OLLAMA_MODEL", "ramiro:instruct"),
+        "llama3",
         "llama3.1:8b",
+        "phi3",
+        "mistral",
         "llama2:7b",
     ]
 
@@ -362,7 +370,8 @@ def _fallback_riesgos(activo):
         f"Decisiones erróneas por alteración de registros en {activo}",
         f"Debilidades de seguridad por cambios inseguros en {activo}",
     ]
-    return riesgos, impactos
+    probabilidades = ["Media", "Alta", "Baja", "Media", "Baja"]
+    return riesgos, impactos, probabilidades
 
 
 def obtener_tratamiento(activo, riesgo, impacto):
@@ -384,8 +393,23 @@ def obtener_tratamiento(activo, riesgo, impacto):
             ),
         },
     ]
-    answer = _chat_completion(messages, max_tokens=120).strip()
-    return answer[:180] if answer else "Aplicar controles ISO 27001, monitoreo continuo y revisión de accesos."
+    try:
+        answer = _chat_completion(messages, max_tokens=120).strip()
+        return answer[:180] if answer else _fallback_tratamiento(riesgo)
+    except Exception:
+        return _fallback_tratamiento(riesgo)
+
+
+def _fallback_tratamiento(riesgo):
+    # Fallback contextual si la IA no responde
+    riesgo_lower = riesgo.lower()
+    if "acceso" in riesgo_lower:
+        return "Implementar MFA, rotación de claves y control de acceso basado en roles (RBAC)."
+    if "fuga" in riesgo_lower or "exposición" in riesgo_lower:
+        return "Cifrado de datos en reposo/tránsito y políticas de prevención de pérdida de datos (DLP)."
+    if "disponibilidad" in riesgo_lower or "caída" in riesgo_lower:
+        return "Configurar alta disponibilidad, redundancia de nodos y planes de contingencia BCP."
+    return "Aplicar controles ISO 27001, monitoreo continuo y revisión periódica de seguridad."
 
 
 def obtener_riesgos(activo):
@@ -393,22 +417,24 @@ def obtener_riesgos(activo):
         {
             "role": "system",
             "content": (
-                "Responde en español como analista de riesgos ISO 27001. "
-                "Debes devolver JSON valido sin texto extra."
+                "Eres un Auditor Senior de Ciberseguridad Bancaria especialista en ISO 27001. "
+                "Tu tarea es realizar un análisis de riesgos riguroso. "
+                "Responde EXCLUSIVAMENTE en formato JSON válido."
             ),
         },
         {
             "role": "user",
             "content": (
-                f"Activo: {activo}. "
-                "Devuelve exactamente 5 riesgos con impacto usando este formato JSON: "
-                "{\"riesgos\":[{\"riesgo\":\"...\",\"impacto\":\"...\"}]}"
+                f"Analiza el siguiente activo bancario: '{activo}'. "
+                "Identifica 5 riesgos críticos. Para cada riesgo, define el impacto y la probabilidad (solo: 'Baja', 'Media', 'Alta'). "
+                "Formato JSON requerido: "
+                "{\"riesgos\":[{\"riesgo\":\"...\",\"impacto\":\"...\",\"probabilidad\":\"...\"}]}"
             ),
         },
     ]
 
     try:
-        answer = _chat_completion(messages, max_tokens=700)
+        answer = _chat_completion(messages, max_tokens=1000)
         # Extrae JSON aunque venga rodeado por texto o markdown.
         match = re.search(r'\{[\s\S]*\}', answer)
         json_payload = match.group(0) if match else answer
@@ -417,12 +443,15 @@ def obtener_riesgos(activo):
 
         riesgos = [str(item.get("riesgo", "")).strip() for item in items][:5]
         impactos = [str(item.get("impacto", "")).strip() for item in items][:5]
+        probabilidades = [str(item.get("probabilidad", "Media")).strip() for item in items][:5]
 
-        if len(riesgos) < 5 or len(impactos) < 5 or any(not r for r in riesgos) or any(not i for i in impactos):
+        # Validar que tengamos datos suficientes
+        if len(riesgos) < 5 or any(not r for r in riesgos):
             return _fallback_riesgos(activo)
 
-        return riesgos, impactos
-    except Exception:
+        return riesgos, impactos, probabilidades
+    except Exception as e:
+        print(f"Error en IA: {e}")
         return _fallback_riesgos(activo)
 
 #riesgos, impactos = obtener_riesgos("mi telefono movil")

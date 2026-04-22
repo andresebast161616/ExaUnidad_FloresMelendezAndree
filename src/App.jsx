@@ -10,6 +10,7 @@ import {
   Typography,
   message,
   Divider,
+  Tag,
 } from 'antd';
 import { LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import axios from 'axios';
@@ -109,6 +110,7 @@ const App = () => {
     activo: '',
     riesgo: '',
     impacto: '',
+    probabilidad: '',
     tratamiento: '',
   });
 
@@ -248,11 +250,12 @@ const App = () => {
         { headers: getAuthHeaders() }
       );
 
-      const { riesgos = [], impactos = [] } = response.data || {};
+      const { riesgos = [], impactos = [], probabilidades = [] } = response.data || {};
       const rows = riesgos.slice(0, 5).map((riesgo, index) => ({
         activo,
         riesgo,
         impacto: impactos[index] || 'Impacto no especificado',
+        probabilidad: probabilidades[index] || 'Media',
       }));
 
       if (rows.length === 0) {
@@ -279,6 +282,7 @@ const App = () => {
       activo: item.activo,
       riesgo: item.riesgo,
       impacto: item.impacto,
+      probabilidad: item.probabilidad,
       tratamiento: '-',
     }));
 
@@ -423,9 +427,21 @@ const App = () => {
       editable: true,
     },
     {
+      title: 'Probabilidad',
+      dataIndex: 'probabilidad',
+      width: '10%',
+      render: (prob) => {
+        let color = 'blue';
+        if (prob === 'Alta') color = 'red';
+        if (prob === 'Media') color = 'orange';
+        if (prob === 'Baja') color = 'green';
+        return <Tag color={color}>{prob}</Tag>;
+      },
+    },
+    {
       title: 'Tratamiento',
       dataIndex: 'tratamiento',
-      width: '30%',
+      width: '25%',
       editable: true,
     },
     {
